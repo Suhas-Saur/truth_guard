@@ -6,14 +6,15 @@
 
 **Your intelligent, multi-layer shield against online misinformation, phishing scams, and artificial text generation.**
 
-[![Live Demo](https://img.shields.io/badge/🌐%20Live%20Demo-Available%20Now-emerald?style=for-the-badge)](https://c7fb1f200cc3ca73-157-50-197-231.serveousercontent.com)
+[![Live Demo](https://img.shields.io/badge/🌐%20Live%20Demo-Active%20Now-emerald?style=for-the-badge)](https://2a7fe58d086f438f-157-50-197-231.serveousercontent.com)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FSuhas-Saur%2Ftruth_guard)
 [![Next.js](https://img.shields.io/badge/Next.js%2016-Turbopack-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React%2018-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![TailwindCSS](https://img.shields.io/badge/TailwindCSS%203.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![Google Gemini](https://img.shields.io/badge/Google%20Gemini-2.5%20Flash-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
 [![License](https://img.shields.io/badge/License-MIT-purple?style=for-the-badge)](LICENSE)
 
-[**Explore Live Demo 🚀**](https://c7fb1f200cc3ca73-157-50-197-231.serveousercontent.com) • [**Report Bug**](https://github.com/Suhas-Saur/truth_guard/issues) • [**Request Feature**](https://github.com/Suhas-Saur/truth_guard/issues)
+[**Explore Live Demo 🚀**](https://2a7fe58d086f438f-157-50-197-231.serveousercontent.com) • [**1-Click Cloud Deploy ⚡**](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FSuhas-Saur%2Ftruth_guard) • [**Report Bug**](https://github.com/Suhas-Saur/truth_guard/issues)
 
 </div>
 
@@ -27,11 +28,13 @@ Misinformation, sophisticated phishing scams, and undetectable AI synthetic text
 
 ---
 
-## 🚀 Live Demo
+## 🚀 Live Demo & Deployment
 
-> 🔗 **Public Web App**: [https://c7fb1f200cc3ca73-157-50-197-231.serveousercontent.com](https://c7fb1f200cc3ca73-157-50-197-231.serveousercontent.com)
->
-> *(Also accessible on local networks at `http://localhost:3001` or via local Wi-Fi)*
+| Deployment Option | Link | Description |
+|---|---|---|
+| **🌐 Live Web App** | [**Open TruthGuard Live**](https://2a7fe58d086f438f-157-50-197-231.serveousercontent.com) | Real-time live instance running directly on the web |
+| **⚡ 24/7 Permanent Cloud** | [**Deploy on Vercel**](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FSuhas-Saur%2Ftruth_guard) | 1-click free permanent deployment to `truth-guard.vercel.app` |
+| **💻 Local Development** | `http://localhost:3000` | Run locally via `npm run dev` or `Start_TruthGuard.bat` |
 
 ---
 
