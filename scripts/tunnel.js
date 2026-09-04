@@ -9,7 +9,7 @@ function startTunnel() {
   const ssh = spawn('ssh', [
     '-o', 'StrictHostKeyChecking=no',
     '-o', 'ServerAliveInterval=15',
-    '-R', '80:localhost:3001',
+    '-R', '80:127.0.0.1:3001',
     'serveo.net'
   ]);
 
