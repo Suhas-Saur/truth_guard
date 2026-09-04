@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
-import { getGeminiResponse } from "../../../lib/gemini";
-
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`;
+import { getGeminiResponse, getGeminiImageResponse } from "../../../lib/gemini";
+import { HistoryModel } from "../../../models/History";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -22,18 +20,29 @@ function parseAIResponse(rawText) {
   return JSON.parse(text.trim());
 }
 
-function formatResult(parsed) {
+function formatResult(parsed, queryText = "AI Content Check") {
   const result =
     parsed.result === "Likely AI-generated" ? "Likely AI-generated" : "Likely Human";
   const confidence =
     typeof parsed.confidence === "number"
       ? Math.min(100, Math.max(0, parsed.confidence))
       : 50;
-  return NextResponse.json({
+
+  const data = {
     result,
     confidence,
     reason: parsed.reason || "No explanation provided.",
-  });
+  };
+
+  HistoryModel.add({
+    type: "ai-content",
+    query: queryText,
+    result: data.result,
+    score: data.confidence,
+    reason: data.reason,
+  }).catch((e) => console.warn("History save error:", e.message));
+
+  return NextResponse.json(data);
 }
 
 const JSON_SCHEMA = `
@@ -44,44 +53,6 @@ The JSON must match exactly:
   "confidence": <integer 0-100, where 100 = definitely the labeled result>,
   "reason": "<concise one or two sentence explanation>"
 }`;
-
-// Call Gemini multimodal API directly (for image files)
-async function callGeminiMultimodal(promptText, base64Data, mimeType, isRetry = false) {
-  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not defined in .env");
-
-  const requestBody = {
-    contents: [
-      {
-        parts: [
-          { text: promptText },
-          { inline_data: { mime_type: mimeType, data: base64Data } },
-        ],
-      },
-    ],
-    generationConfig: { temperature: 0.2 },
-  };
-
-  const res = await fetch(`${GEMINI_ENDPOINT}?key=${GEMINI_API_KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(requestBody),
-  });
-
-  if (!res.ok) {
-    if (res.status === 429 && !isRetry) {
-      await new Promise((r) => setTimeout(r, 2000));
-      return callGeminiMultimodal(promptText, base64Data, mimeType, true);
-    }
-    const err = new Error(`Gemini API failed: ${res.status} ${res.statusText}`);
-    err.status = res.status;
-    throw err;
-  }
-
-  const data = await res.json();
-  const generated = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!generated) throw new Error("Could not extract text from Gemini multimodal response.");
-  return generated;
-}
 
 function buildPrompt(contentDescription) {
   return `
@@ -139,7 +110,7 @@ ${text.trim()}
 """
 `;
       const aiResponse = await getGeminiResponse(prompt);
-      return formatResult(parseAIResponse(aiResponse));
+      return formatResult(parseAIResponse(aiResponse), text.trim());
     }
 
     // ── IMAGE FILE ─────────────────────────────────────────────────────────
@@ -152,18 +123,16 @@ Analyze the image for signs of AI generation:
 - If it is a photograph or artwork, look for AI image generation artifacts (perfect symmetry, unnatural textures, dreamlike quality, watermarks from AI tools)
 - Consider whether a human or AI system likely created this image
 `;
-      const aiResponse = await callGeminiMultimodal(prompt, file, mimeType);
-      return formatResult(parseAIResponse(aiResponse));
+      const aiResponse = await getGeminiImageResponse(prompt, file, mimeType);
+      return formatResult(parseAIResponse(aiResponse), `Image: ${fileName || "Uploaded image"}`);
     }
 
     // ── DOCUMENT FILE (PDF, DOC, TXT) ──────────────────────────────────────
     if (hasFile && isDocument && !hasText) {
-      // Send the base64 encoded document to Gemini as inline data
-      // Gemini can read PDFs and TXT files directly
       const effectiveMimeType =
         mimeType === "application/msword" ||
         mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          ? "application/pdf" // Treat DOC/DOCX as PDF for Gemini
+          ? "application/pdf"
           : mimeType || "text/plain";
 
       const prompt = `
@@ -173,10 +142,9 @@ Read all the text content in this document and analyze the writing style to dete
 `;
 
       try {
-        const aiResponse = await callGeminiMultimodal(prompt, file, effectiveMimeType);
-        return formatResult(parseAIResponse(aiResponse));
+        const aiResponse = await getGeminiImageResponse(prompt, file, effectiveMimeType);
+        return formatResult(parseAIResponse(aiResponse), `Document: ${fileName || "document"}`);
       } catch {
-        // If Gemini can't parse the document format, fall back gracefully
         return fallback(
           `Could not extract content from "${fileName || "the file"}". Try pasting the text directly for best results.`
         );
@@ -197,10 +165,9 @@ Also consider the attached file. If it contains text, cross-reference both for c
 `;
 
       if (isImage) {
-        const aiResponse = await callGeminiMultimodal(prompt, file, mimeType);
-        return formatResult(parseAIResponse(aiResponse));
+        const aiResponse = await getGeminiImageResponse(prompt, file, mimeType);
+        return formatResult(parseAIResponse(aiResponse), text.trim());
       } else {
-        // For text + document, just analyze the combined text prompt
         const textOnlyPrompt = `
 ${buildPrompt("text")}
 
@@ -212,7 +179,7 @@ ${text.trim()}
 Note: The user also attached a document file named "${fileName || "document"}". Give weight to the pasted text above.
 `;
         const aiResponse = await getGeminiResponse(textOnlyPrompt);
-        return formatResult(parseAIResponse(aiResponse));
+        return formatResult(parseAIResponse(aiResponse), text.trim());
       }
     }
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getGeminiResponse } from "../../../lib/gemini";
+import { HistoryModel } from "../../../models/History";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -80,11 +81,21 @@ export async function POST(req) {
     // Step 1 — run basic heuristic checks
     const check = basicChecks(trimmedUrl);
     if (check.flagged) {
-      return NextResponse.json({
+      const finalResult = {
         result: "Suspicious",
         score: check.score || 10,
         reason: check.reason,
-      });
+      };
+
+      HistoryModel.add({
+        type: "website-safety",
+        query: trimmedUrl,
+        result: finalResult.result,
+        score: finalResult.score,
+        reason: finalResult.reason,
+      }).catch((e) => console.warn("History save error:", e.message));
+
+      return NextResponse.json(finalResult);
     }
 
     // Step 2 — AI analysis
@@ -117,11 +128,21 @@ The JSON must match exactly:
     const aiResponse = await getGeminiResponse(prompt);
     const parsed = parseAIResponse(aiResponse);
 
-    return NextResponse.json({
+    const finalResult = {
       result: parsed.result === "Safe" ? "Safe" : "Suspicious",
       score: typeof parsed.score === "number" ? Math.min(100, Math.max(0, parsed.score)) : 50,
       reason: parsed.reason || "No explanation provided.",
-    });
+    };
+
+    HistoryModel.add({
+      type: "website-safety",
+      query: trimmedUrl,
+      result: finalResult.result,
+      score: finalResult.score,
+      reason: finalResult.reason,
+    }).catch((e) => console.warn("History save error:", e.message));
+
+    return NextResponse.json(finalResult);
 
   } catch (error) {
     console.error("API Error - Website Safety Route:", error);

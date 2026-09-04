@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
-import { getGeminiResponse } from "../../../lib/gemini";
+import { getGeminiResponse, getGeminiImageResponse } from "../../../lib/gemini";
+import { HistoryModel } from "../../../models/History";
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-
-const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`;
-
-// Shared JSON schema instruction appended to every prompt
 function jsonSchema() {
   return `
 You must respond ONLY with a raw JSON object and no other text, markdown, or code blocks.
@@ -64,51 +60,6 @@ function fallbackResponse(reason = "Could not reliably analyze the content.") {
   return NextResponse.json({ result: "Uncertain", confidence: 50, reason });
 }
 
-// Call Gemini directly for image (multimodal) – gemini.js only supports text
-async function getGeminiImageResponse(prompt, base64Image, mimeType, isRetry = false) {
-  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not defined in .env");
-
-  const body = {
-    contents: [
-      {
-        parts: [
-          { text: prompt },
-          {
-            inline_data: {
-              mime_type: mimeType || "image/jpeg",
-              data: base64Image,
-            },
-          },
-        ],
-      },
-    ],
-    generationConfig: { temperature: 0.2 },
-  };
-
-  const response = await fetch(`${GEMINI_ENDPOINT}?key=${GEMINI_API_KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    if (response.status === 429 && !isRetry) {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      return getGeminiImageResponse(prompt, base64Image, mimeType, true);
-    }
-    const errorText = await response.text();
-    console.error(`Gemini API Image Error (${response.status}):`, errorText);
-    const error = new Error(`Gemini API failed: ${response.status} ${response.statusText}`);
-    error.status = response.status;
-    throw error;
-  }
-
-  const data = await response.json();
-  const generatedText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!generatedText) throw new Error("Could not extract text from Gemini image response.");
-  return generatedText;
-}
-
 export async function POST(req) {
   try {
     const body = await req.json();
@@ -134,13 +85,25 @@ ${content}
 `;
       const aiResponse = await getGeminiResponse(prompt);
       const parsed = parseAIResponse(aiResponse);
-      return NextResponse.json({
-        result: parsed.result || "Uncertain",
-        confidence: parsed.confidence >= 0 ? parsed.confidence : 0,
-        reason: parsed.reason || "No explanation provided.",
-      });
-    }
 
+      const finalResult = {
+        result: parsed.result || "Uncertain",
+        confidence: parsed.confidence >= 0 ? parsed.confidence : 50,
+        reason: parsed.reason || "No explanation provided.",
+        verification_summary: parsed.verification_summary || "",
+      };
+
+      // Auto-save to history asynchronously
+      HistoryModel.add({
+        type: "fake-news",
+        query: content,
+        result: finalResult.result,
+        score: finalResult.confidence,
+        reason: finalResult.reason,
+      }).catch((e) => console.warn("History save error:", e.message));
+
+      return NextResponse.json(finalResult);
+    }
 
     // ── IMAGE ─────────────────────────────────────────────────────────────────
     if (type === "image") {
@@ -156,15 +119,27 @@ ${jsonSchema()}
 `;
       const aiResponse = await getGeminiImageResponse(prompt, image, mimeType);
       const parsed = parseAIResponse(aiResponse);
-      return NextResponse.json({
+
+      const finalResult = {
         result: parsed.result || "Uncertain",
-        confidence: parsed.confidence >= 0 ? parsed.confidence : 0,
+        confidence: parsed.confidence >= 0 ? parsed.confidence : 50,
         reason: parsed.reason || "No explanation provided.",
-      });
+        verification_summary: parsed.verification_summary || "",
+      };
+
+      // Auto-save to history asynchronously
+      HistoryModel.add({
+        type: "fake-news",
+        query: "Image news analysis",
+        result: finalResult.result,
+        score: finalResult.confidence,
+        reason: finalResult.reason,
+      }).catch((e) => console.warn("History save error:", e.message));
+
+      return NextResponse.json(finalResult);
     }
 
     return fallbackResponse("Unknown input type.");
-
   } catch (error) {
     console.error("API Error - Fake News Route:", error);
 
@@ -172,9 +147,7 @@ ${jsonSchema()}
       return fallbackResponse("Rate limit reached. Please try again shortly.");
     }
 
-    // Surface JSON parse errors separately
     if (error instanceof SyntaxError) {
-      console.error("JSON parse error from Gemini response");
       return fallbackResponse("Could not parse AI response.");
     }
 

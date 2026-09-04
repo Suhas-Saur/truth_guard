@@ -38,3 +38,9 @@ pnpm-debug.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local data and tunnel
+data/
+tunnel_url.txt
+tmp_test*
+*.log
