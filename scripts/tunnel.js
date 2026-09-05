@@ -5,33 +5,32 @@ const path = require('path');
 const logPath = path.join(__dirname, '../tunnel_url.txt');
 
 function startTunnel() {
-  console.log('Starting persistent Serveo tunnel...');
+  console.log('Starting resilient Serveo tunnel...');
+  
   const ssh = spawn('ssh', [
     '-o', 'StrictHostKeyChecking=no',
-    '-o', 'ServerAliveInterval=15',
-    '-R', '80:127.0.0.1:3001',
+    '-o', 'ServerAliveInterval=10',
+    '-o', 'ServerAliveCountMax=3',
+    '-R', '80:127.0.0.1:3000',
     'serveo.net'
   ]);
 
-  ssh.stdout.on('data', (data) => {
+  const handleOutput = (data) => {
     const text = data.toString();
     process.stdout.write(text);
-    const match = text.match(/https:\/\/[a-zA-Z0-9._-]+\.serveousercontent\.com/);
-    if (match) {
-      fs.writeFileSync(logPath, match[0], 'utf-8');
-      console.log('\n[ACTIVE_TUNNEL_URL]:', match[0], '\n');
-    }
-  });
 
-  ssh.stderr.on('data', (data) => {
-    const text = data.toString();
-    process.stderr.write(text);
     const match = text.match(/https:\/\/[a-zA-Z0-9._-]+\.serveousercontent\.com/);
     if (match) {
-      fs.writeFileSync(logPath, match[0], 'utf-8');
-      console.log('\n[ACTIVE_TUNNEL_URL]:', match[0], '\n');
+      const activeUrl = match[0];
+      fs.writeFileSync(logPath, activeUrl, 'utf-8');
+      console.log('\n========================================');
+      console.log('  [TRUTHGUARD LIVE URL]:', activeUrl);
+      console.log('========================================\n');
     }
-  });
+  };
+
+  ssh.stdout.on('data', handleOutput);
+  ssh.stderr.on('data', handleOutput);
 
   ssh.on('close', (code) => {
     console.log(`Tunnel closed (code ${code}). Auto-reconnecting in 3s...`);
